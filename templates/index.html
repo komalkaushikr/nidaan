@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NiDaan — Dignified Disposal. Zero Shame. Zero Waste.</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --bg:#0d0f12;--surface:#161a20;--surface2:#1e2329;
+    --border:rgba(255,255,255,0.07);--text:#e8eaed;--muted:#8b9099;
+    --accent:#00c896;--accent2:#7c6af5;--warn:#f5a623;--danger:#e05c5c;
+  }
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+  nav{display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:56px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1000;}
+  .logo{display:flex;align-items:center;gap:10px;}
+  .logo-icon{width:30px;height:30px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .logo-name{font-size:17px;font-weight:700;}
+  .logo-tag{font-size:10px;color:var(--muted);}
+  .nav-pills{display:flex;gap:6px;}
+  .pill{padding:5px 14px;border-radius:20px;font-size:12px;border:1px solid var(--border);cursor:pointer;transition:all 0.2s;color:var(--muted);background:transparent;}
+  .pill.active,.pill:hover{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600;}
+  .live-badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);}
+  .live-dot{width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.4)}}
+  .layout{display:grid;grid-template-columns:340px 1fr;height:calc(100vh - 56px);}
+  .sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;}
+  .map-area{position:relative;}
+  #map{width:100%;height:100%;}
+  .impact-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);}
+  .impact-card{background:var(--surface2);padding:14px 16px;}
+  .impact-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;}
+  .impact-value{font-size:19px;font-weight:700;color:var(--accent);}
+  .impact-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+  .section-header{padding:14px 16px 8px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;border-top:1px solid var(--border);}
+  .bin-card{margin:0 12px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:all 0.2s;}
+  .bin-card:hover{border-color:rgba(0,200,150,0.35);transform:translateY(-1px);}
+  .bin-card.critical{border-color:rgba(224,92,92,0.35);}
+  .bin-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;}
+  .bin-name{font-size:13px;font-weight:500;line-height:1.3;}
+  .bin-type{font-size:10px;color:var(--muted);background:var(--surface);padding:2px 8px;border-radius:10px;border:1px solid var(--border);white-space:nowrap;flex-shrink:0;}
+  .bin-bar{height:4px;background:var(--surface);border-radius:3px;overflow:hidden;margin-bottom:6px;}
+  .bin-bar-inner{height:100%;border-radius:3px;}
+  .bin-bottom{display:flex;justify-content:space-between;align-items:center;}
+  .bin-pct{font-size:12px;font-weight:600;}
+  .alert-btn{font-size:11px;padding:4px 10px;border-radius:6px;border:none;cursor:pointer;font-weight:600;}
+  .phase-box{margin:0 12px 8px;border-radius:10px;padding:13px 14px;border:1px solid var(--border);}
+  .phase-title{font-size:12px;font-weight:600;margin-bottom:6px;}
+  .phase-desc{font-size:11px;color:var(--muted);line-height:1.7;}
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--accent);border-radius:12px;padding:14px 18px;z-index:9999;transform:translateY(100px);opacity:0;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);max-width:300px;}
+  .toast.show{transform:translateY(0);opacity:1;}
+  .toast-title{font-weight:600;color:var(--accent);margin-bottom:4px;font-size:13px;}
+  .toast-body{color:var(--muted);line-height:1.5;font-size:12px;}
+  .map-legend{position:absolute;top:16px;left:16px;z-index:500;background:rgba(22,26,32,0.93);border:1px solid var(--border);border-radius:10px;padding:12px 16px;backdrop-filter:blur(8px);}
+  .legend-title{font-size:12px;font-weight:600;margin-bottom:8px;}
+  .legend-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:5px;}
+  .legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .stat-box{position:absolute;top:16px;right:16px;z-index:500;background:rgba(22,26,32,0.93);border:1px solid var(--border);border-radius:10px;padding:12px 16px;backdrop-filter:blur(8px);min-width:175px;}
+  .stat-row{display:flex;justify-content:space-between;gap:16px;margin-bottom:6px;font-size:11px;}
+  .stat-row:last-child{margin-bottom:0;}
+  .stat-label{color:var(--muted);}
+  .stat-val{font-weight:600;color:var(--accent);}
+  .sidebar::-webkit-scrollbar{width:3px;}
+  .sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+  .leaflet-popup-content-wrapper{background:#1e2329;border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#e8eaed;box-shadow:0 8px 32px rgba(0,0,0,0.6);}
+  .leaflet-popup-tip{background:#1e2329;}
+  .leaflet-popup-content{margin:12px 16px;min-width:190px;}
+  .p-name{font-size:14px;font-weight:600;margin-bottom:3px;}
+  .p-type{font-size:11px;color:#8b9099;margin-bottom:8px;}
+  .p-bar{height:4px;background:#2a2f38;border-radius:2px;margin:6px 0 3px;}
+  .p-bar-inner{height:100%;border-radius:2px;}
+  .p-pct{font-size:12px;font-weight:600;}
+  .p-phase{font-size:10px;color:#8b9099;margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,0.07);}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">
+    <div class="logo-icon">♻</div>
+    <div>
+      <div class="logo-name">NiDaan</div>
+      <div class="logo-tag">Dignified Disposal · Zero Shame · Zero Waste</div>
+    </div>
+  </div>
+  <div class="nav-pills">
+    <button class="pill active" onclick="showView('map',this)">Live Map</button>
+    <button class="pill" onclick="showView('impact',this)">Impact</button>
+    <button class="pill" onclick="showView('phases',this)">Roadmap</button>
+  </div>
+  <div class="live-badge">
+    <div class="live-dot"></div>
+    Live · Delhi NCR
+  </div>
+</nav>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="impact-strip" id="impactStrip"></div>
+    <div id="sidebarContent"></div>
+    <div style="padding:16px;margin-top:auto;border-top:1px solid var(--border);">
+      <div style="font-size:10px;color:var(--muted);line-height:1.9;">
+        Powered by <span style="color:var(--accent);font-weight:600;">Padcare Labs</span> · SWM Rules 2016 compliant<br>
+        68% less carbon vs incineration · <span style="color:var(--accent2);">Phase 2: on-site micro-recycling hubs</span>
+      </div>
+    </div>
+  </div>
+  <div class="map-area">
+    <div id="map"></div>
+    <div class="map-legend">
+      <div class="legend-title">Bin Fill Level</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#00c896"></div>0–50% Good</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#f5a623"></div>51–79% Pickup soon</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#e05c5c"></div>80%+ Alert now</div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.07);font-size:10px;color:var(--muted);">
+        <span style="color:var(--accent2);">★</span> Phase 2 micro-hub
+      </div>
+    </div>
+    <div class="stat-box">
+      <div class="legend-title">Live Network</div>
+      <div class="stat-row"><span class="stat-label">Active bins</span><span class="stat-val" id="s1">12</span></div>
+      <div class="stat-row"><span class="stat-label">Padcare partners</span><span class="stat-val" id="s2">6</span></div>
+      <div class="stat-row"><span class="stat-label">SHG agents</span><span class="stat-val" id="s3">23</span></div>
+      <div class="stat-row"><span class="stat-label">Carbon saved</span><span class="stat-val" id="s4">654 kg</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title" id="toastTitle"></div>
+  <div class="toast-body" id="toastBody"></div>
+</div>
+
+<script>
+const bins=[
+  {id:1,name:"Miranda House College",lat:28.6878,lng:77.2150,fill:78,type:"College",phase:1},
+  {id:2,name:"Lady Shri Ram College",lat:28.6563,lng:77.2436,fill:45,type:"College",phase:1},
+  {id:3,name:"Gargi College",lat:28.5535,lng:77.1889,fill:92,type:"College",phase:1},
+  {id:4,name:"Jesus & Mary College",lat:28.5972,lng:77.1714,fill:31,type:"College",phase:1},
+  {id:5,name:"IP College for Women",lat:28.6741,lng:77.2291,fill:67,type:"College",phase:1},
+  {id:6,name:"Sarojini Nagar Hostel",lat:28.5770,lng:77.1955,fill:55,type:"Hostel",phase:1},
+  {id:7,name:"Lajpat Nagar Community",lat:28.5677,lng:77.2433,fill:83,type:"Community",phase:1},
+  {id:8,name:"Karol Bagh Hostel",lat:28.6514,lng:77.1907,fill:20,type:"Hostel",phase:1},
+  {id:9,name:"Dwarka Sector 10 Hub",lat:28.5823,lng:77.0490,fill:61,type:"Micro-hub ★",phase:2},
+  {id:10,name:"Rohini Women's Hostel",lat:28.7041,lng:77.1025,fill:44,type:"Hostel",phase:1},
+  {id:11,name:"Vasant Kunj SHG Center",lat:28.5200,lng:77.1570,fill:70,type:"Micro-hub ★",phase:2},
+  {id:12,name:"Janakpuri Community Hall",lat:28.6219,lng:77.0832,fill:38,type:"Community",phase:1},
+];
+
+function color(f){return f>=80?'#e05c5c':f>=51?'#f5a623':'#00c896';}
+function fmt(n){return n>=100000?(n/100000).toFixed(1)+'L':n>=1000?(n/1000).toFixed(0)+'K':n;}
+
+// Impact strip
+document.getElementById('impactStrip').innerHTML=`
+  <div class="impact-card"><div class="impact-label">Pads Collected</div><div class="impact-value">2.8L</div><div class="impact-sub">this month</div></div>
+  <div class="impact-card"><div class="impact-label">Burns Prevented</div><div class="impact-value">2.8L</div><div class="impact-sub">dioxin events</div></div>
+  <div class="impact-card"><div class="impact-label">SHG Earnings</div><div class="impact-value">₹1.4L</div><div class="impact-sub">paid to women</div></div>
+`;
+
+// Map
+const map=L.map('map',{zoomControl:false}).setView([28.6200,77.1700],11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB',maxZoom:19}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+const markers={};
+bins.forEach(b=>{
+  const c=color(b.fill);
+  const star=b.phase===2?`<div style="position:absolute;top:-5px;right:-3px;font-size:10px;color:#7c6af5;font-weight:900;">★</div>`:'';
+  const icon=L.divIcon({
+    className:'',
+    html:`<div style="position:relative;width:40px;height:40px;background:${c}18;border:2px solid ${c};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${c};">${b.fill}%${star}</div>`,
+    iconSize:[40,40],iconAnchor:[20,20],popupAnchor:[0,-22]
+  });
+  const m=L.marker([b.lat,b.lng],{icon}).addTo(map);
+  m.bindPopup(`
+    <div class="p-name">${b.name}</div>
+    <div class="p-type">${b.type}</div>
+    <div class="p-bar"><div class="p-bar-inner" style="width:${b.fill}%;background:${c}"></div></div>
+    <div class="p-pct" style="color:${c}">${b.fill}% full</div>
+    ${b.fill>=80?`<div style="margin-top:6px;font-size:11px;color:#e05c5c;font-weight:600;">⚠ Immediate pickup required</div>`:''}
+    <div class="p-phase">${b.phase===2?'★ Phase 2 — Padcare micro-unit on-site':'Phase 1 — transport to Padcare facility'}</div>
+  `);
+  markers[b.id]=m;
+});
+
+function focusBin(id){
+  const b=bins.find(x=>x.id===id);
+  if(!b)return;
+  map.flyTo([b.lat,b.lng],14,{duration:0.8});
+  setTimeout(()=>markers[id].openPopup(),900);
+}
+
+function notify(id,name){
+  showToast('SHG Agent Notified ✓',`Pickup dispatched to ${name}. ETA 25 mins. Padcare transport booked.`);
+}
+
+function showToast(title,body){
+  const t=document.getElementById('toast');
+  document.getElementById('toastTitle').textContent=title;
+  document.getElementById('toastBody').textContent=body;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),4000);
+}
+
+function renderBins(){
+  document.getElementById('sidebarContent').innerHTML=`
+    <div class="section-header">Collection Points — ${bins.length} Active</div>
+    ${bins.map(b=>{
+      const c=color(b.fill);
+      return `<div class="bin-card ${b.fill>=80?'critical':''}" onclick="focusBin(${b.id})">
+        <div class="bin-top">
+          <div class="bin-name">${b.name}</div>
+          <div class="bin-type">${b.type}</div>
+        </div>
+        <div class="bin-bar"><div class="bin-bar-inner" style="width:${b.fill}%;background:${c}"></div></div>
+        <div class="bin-bottom">
+          <span class="bin-pct" style="color:${c}">${b.fill}% full</span>
+          ${b.fill>=80
+            ?`<button class="alert-btn" style="background:rgba(224,92,92,0.12);color:#e05c5c;border:1px solid rgba(224,92,92,0.3);" onclick="event.stopPropagation();notify(${b.id},'${b.name}')">⚠ Alert SHG</button>`
+            :`<button class="alert-btn" style="background:rgba(0,200,150,0.08);color:#00c896;border:1px solid rgba(0,200,150,0.2);" onclick="event.stopPropagation();notify(${b.id},'${b.name}')">Notify Agent</button>`
+          }
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function renderImpact(){
+  document.getElementById('sidebarContent').innerHTML=`
+    <div class="section-header">Impact Breakdown</div>
+    ${[
+      {l:'Pads recycled this month',v:'2,84,710',s:'vs landfill / incineration',c:'var(--accent)'},
+      {l:'Dioxin burns prevented',v:'2,84,710',s:'school incinerator events avoided',c:'var(--accent)'},
+      {l:'Carbon saved',v:'654 kg CO₂',s:'68% less than incineration (Padcare data)',c:'#7c6af5'},
+      {l:'SHG agent earnings',v:'₹1,42,355',s:'direct income to women collectors',c:'var(--warn)'},
+      {l:'Active collection points',v:'12',s:'Delhi NCR pilot network',c:'var(--accent)'},
+      {l:'Padcare partners',v:'6',s:'certified processing facilities',c:'var(--accent)'},
+    ].map(i=>`
+      <div class="bin-card">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">${i.l}</div>
+        <div style="font-size:22px;font-weight:700;color:${i.c};letter-spacing:-0.5px;">${i.v}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${i.s}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function renderPhases(){
+  document.getElementById('sidebarContent').innerHTML=`
+    <div class="section-header">Scaling Roadmap</div>
+    <div class="phase-box" style="background:rgba(0,200,150,0.04);border-color:rgba(0,200,150,0.2);">
+      <div class="phase-title" style="color:var(--accent)">Phase 1 — Now · Asset Light</div>
+      <div class="phase-desc">Deploy pouches + smart bins at colleges, hostels, community centers. SHG agents collect and transport to nearest Padcare facility.<br><br>Revenue: EPR compliance fees from pad companies + CSR sponsorships + per-kg fee from Padcare.</div>
+    </div>
+    <div class="phase-box" style="background:rgba(124,106,245,0.04);border-color:rgba(124,106,245,0.2);">
+      <div class="phase-title" style="color:var(--accent2)">Phase 2 — Scale · Micro-Hubs</div>
+      <div class="phase-desc">Install Padcare processing units at high-density hubs. On-site recycling produces cellulose, plastic pellets, paper pulp locally.<br><br>SHG women become micro-hub operators — a full income center, not just a collection point. Revenue adds: recycled material sales.</div>
+    </div>
+    <div class="phase-box" style="background:rgba(245,166,35,0.04);border-color:rgba(245,166,35,0.2);">
+      <div class="phase-title" style="color:var(--warn)">Phase 3 — National OS</div>
+      <div class="phase-desc">NiDaan becomes India's national menstrual waste collection infrastructure. Municipal integration. Mandatory EPR dashboard for all pad manufacturers. Every school, hostel, colony — one network.</div>
+    </div>
+    <div class="bin-card" style="margin-top:4px;">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Why Padcare needs NiDaan</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.7;">Padcare currently recycles <span style="color:var(--danger);font-weight:700;">0.2%</span> of India's pad waste — not because their tech fails, but because <span style="color:var(--accent);font-weight:600;">collection infrastructure doesn't exist.</span> We are their missing supply chain.</div>
+    </div>
+  `;
+}
+
+function showView(view,btn){
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  if(view==='map')renderBins();
+  else if(view==='impact')renderImpact();
+  else renderPhases();
+}
+
+renderBins();
+</script>
+</body>
+</html>
