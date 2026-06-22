@@ -1,0 +1,88 @@
+import numpy as np
+
+bins = [
+    ("Miranda House College", 2.6),
+    ("Lady Shri Ram College", 2.2),
+    ("Gargi College", 3.0),
+    ("Jesus & Mary College", 1.9),
+    ("IP College for Women", 2.4),
+    ("Sarojini Nagar Hostel", 1.8),
+    ("Lajpat Nagar Community Center", 0.8),
+    ("Karol Bagh Hostel Block B", 1.5),
+    ("Dwarka Sector 10 SHG Center", 0.6),
+    ("Rohini Women's Hostel", 1.7),
+]
+
+HOURS = 14 * 24
+ROLL_WINDOW = 6
+LOOKAHEAD_HR = 1.5
+
+def simulate(demand_pads, demand_inc, eta_sequence, predictive):
+    fill = 10.0
+    history = []
+    overflow = 0
+    trips = 0
+    lead_times = []
+    eta_idx = 0
+    reset_rng = np.random.default_rng(123)
+    for h in range(HOURS):
+        fill += demand_pads[h] * demand_inc[h]
+        history.append(fill)
+        if len(history) > ROLL_WINDOW:
+            history.pop(0)
+
+        fire = False
+        predicted_early = False
+        if fill >= 80:
+            fire = True  # safety net -- always fires once actually at/over threshold
+        if predictive and not fire and len(history) >= ROLL_WINDOW:
+            x = np.arange(len(history))
+            slope, _ = np.polyfit(x, history, 1)
+            if slope > 0:
+                hrs_to_80 = (80 - fill) / slope
+                if 0 <= hrs_to_80 <= LOOKAHEAD_HR:
+                    fire = True
+                    predicted_early = True
+                    lead_times.append(hrs_to_80)
+
+        if fire:
+            eta = eta_sequence[eta_idx % len(eta_sequence)]
+            eta_idx += 1
+            t = h
+            while t < h + eta and t < HOURS - 1:
+                t += 1
+                fill += demand_pads[t] * demand_inc[t]
+            if fill >= 100:
+                overflow += 1
+            trips += 1
+            fill = reset_rng.uniform(3, 8)
+    return overflow, trips, lead_times
+
+rng_main = np.random.default_rng(42)
+rng_eta = np.random.default_rng(7)
+eta_pool = [max(0.25, rng_eta.normal(1.3, 0.6)) for _ in range(5000)]  # ~36 min avg agent travel, realistic variance
+
+tot_overflow_r = tot_trips_r = tot_overflow_p = tot_trips_p = 0
+all_lead = []
+
+for name, lam in bins:
+    demand_pads = rng_main.poisson(lam, HOURS)
+    demand_inc = rng_main.uniform(0.8, 1.5, HOURS)
+
+    o_r, t_r, _ = simulate(demand_pads, demand_inc, eta_pool, predictive=False)
+    o_p, t_p, lt = simulate(demand_pads, demand_inc, eta_pool, predictive=True)
+
+    tot_overflow_r += o_r; tot_trips_r += t_r
+    tot_overflow_p += o_p; tot_trips_p += t_p
+    all_lead.extend(lt)
+
+print(f"Reactive   -> overflow events: {tot_overflow_r}, total trips: {tot_trips_r}")
+print(f"Predictive -> overflow events: {tot_overflow_p}, total trips: {tot_trips_p}")
+if tot_overflow_r:
+    print(f"Overflow reduction: {(1 - tot_overflow_p/tot_overflow_r)*100:.1f}%")
+else:
+    print("No overflow in reactive case either at this ETA distribution")
+print(f"Trip count delta: {tot_trips_p - tot_trips_r}")
+print(f"Predictive alerts fired early (not via safety net): {len(all_lead)} / {tot_trips_p}")
+if all_lead:
+    print(f"Avg lead time gained on early-fired alerts: {np.mean(all_lead):.2f} hours")
